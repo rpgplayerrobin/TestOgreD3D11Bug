@@ -121,7 +121,7 @@ namespace Ogre {
         if(!mStagingBuffer)
             createStagingBuffer();
 
-        if(flags == D3D11_MAP_READ_WRITE || flags == D3D11_MAP_READ)
+		if (flags == D3D11_MAP_READ_WRITE || flags == D3D11_MAP_READ || flags == D3D11_MAP_WRITE)
         {
             D3D11_BOX boxDx11 = getSubresourceBox(mLockedBox); // both src and dest
             UINT subresource = getSubresourceIndex(mLockedBox.front);
@@ -174,11 +174,18 @@ namespace Ogre {
             break;
         };
 
-        int usage = mUsage & 0xF; // drop TU_* flags
-        if(usage == HBU_GPU_ONLY || usage == HBU_GPU_TO_CPU || options == HBL_READ_ONLY || options == HBL_NORMAL)
-            _mapstagingbuffer(flags, rval);
-        else
-            _map(mParentTexture->getTextureResource(), flags, rval);
+		if (mUsage == HBU_STATIC || mUsage & HBU_DYNAMIC)
+		{
+			if (mUsage == HBU_STATIC || options == HBL_READ_ONLY || options == HBL_NORMAL || options == HBL_WRITE_ONLY)
+				_mapstagingbuffer(flags, rval);
+			else
+				_map(mParentTexture->getTextureResource(), flags, rval);
+		}
+		else
+		{
+			mDataForStaticUsageLock.resize(rval.getConsecutiveSize());
+			rval.data = (uchar*)mDataForStaticUsageLock.data();
+		}
 
         // save without offset
         mCurrentLock = rval;
@@ -198,6 +205,27 @@ namespace Ogre {
                 "D3D11 device unmap resource\nError Description:" + errorDescription,
                 "D3D11HardwarePixelBuffer::_unmap");
         }
+    }
+	//-----------------------------------------------------------------------------  
+	void D3D11HardwarePixelBuffer::_unmapstaticbuffer()
+    {
+        D3D11_BOX dstBoxDx11 = getSubresourceBox(mLockedBox);
+        UINT subresource = getSubresourceIndex(mLockedBox.front);
+        UINT srcRowPitch = PixelUtil::getMemorySize(mCurrentLock.getWidth(), 1, 1, mFormat);
+        UINT srcDepthPitch = PixelUtil::getMemorySize(mCurrentLock.getWidth(), mCurrentLock.getHeight(), 1, mFormat); // H * rowPitch is invalid for compressed formats
+
+        mDevice.GetImmediateContext()->UpdateSubresource(
+                    mParentTexture->getTextureResource(), subresource, &dstBoxDx11,
+                    mDataForStaticUsageLock.data(), srcRowPitch, srcDepthPitch);
+        if (mDevice.isError())
+        {
+            String errorDescription; errorDescription
+                .append("D3D11 device cannot update staging ").append(toString(mParentTexture->getTextureType()))
+                .append("\nError Description:").append(mDevice.getErrorDescription());
+            OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, errorDescription, "D3D11HardwarePixelBuffer::_unmapstaticbuffer");
+        }
+
+        mDataForStaticUsageLock.shrink_to_fit();
     }
     //-----------------------------------------------------------------------------  
     void D3D11HardwarePixelBuffer::_unmapstagingbuffer(bool copyback)
@@ -219,13 +247,26 @@ namespace Ogre {
     //-----------------------------------------------------------------------------  
     void D3D11HardwarePixelBuffer::unlockImpl(void)
     {
-        int usage = mUsage & 0xF; // drop TU_* flags
-        if(usage == HBU_GPU_ONLY || usage == HBU_GPU_TO_CPU || mCurrentLockOptions == HBL_NORMAL || mCurrentLockOptions == HBL_READ_ONLY)
-        {
-            _unmapstagingbuffer(mCurrentLockOptions == HBL_NORMAL || mCurrentLockOptions == HBL_WRITE_ONLY);
-        }
-        else
-            _unmap(mParentTexture->getTextureResource());
+		if (mUsage == HBU_STATIC)
+			_unmapstagingbuffer();
+		else if (mUsage & HBU_DYNAMIC)
+		{
+			if (mCurrentLockOptions == HBL_READ_ONLY || mCurrentLockOptions == HBL_NORMAL || mCurrentLockOptions == HBL_WRITE_ONLY)
+			{
+				PixelBox box;
+				box.format = mFormat;
+				_map(mParentTexture->getTextureResource(), D3D11_MAP_WRITE_DISCARD, box);
+				void *data = box.data;
+				memcpy(data, mCurrentLock.data, mSizeInBytes);
+				// unmap the texture and the staging buffer
+				_unmap(mParentTexture->getTextureResource());
+				_unmapstagingbuffer(false);
+			}
+			else
+				_unmap(mParentTexture->getTextureResource());
+		}
+		else
+			_unmapstaticbuffer();
 
         _genMipmaps();
     }

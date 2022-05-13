@@ -52,7 +52,7 @@ namespace Ogre {
 		bool useShadowBuffer)
 	{
 		assert(numVerts > 0);
-		auto impl = new D3D11HardwareBuffer(D3D11HardwareBuffer::VERTEX_BUFFER, vertexSize * numVerts, usage, mlpD3DDevice, useShadowBuffer, false);
+		auto impl = new D3D11HardwareBuffer(D3D11HardwareBuffer::VERTEX_BUFFER, vertexSize * numVerts, usage, mlpD3DDevice, false, useShadowBuffer, false);
         auto buf = std::make_shared<HardwareVertexBuffer>(this, vertexSize, numVerts, impl);
         {
             OGRE_LOCK_MUTEX(mVertexBuffersMutex);
@@ -68,7 +68,7 @@ namespace Ogre {
 	{
 		assert(numVerts > 0);
 
-		auto impl = new D3D11HardwareBuffer(D3D11HardwareBuffer::VERTEX_BUFFER, vertexSize * numVerts, usage, mlpD3DDevice, useShadowBuffer, true);
+		auto impl = new D3D11HardwareBuffer(D3D11HardwareBuffer::VERTEX_BUFFER, vertexSize * numVerts, usage, mlpD3DDevice, false, useShadowBuffer, true);
         auto buf = std::make_shared<HardwareVertexBuffer>(this, vertexSize, numVerts, impl);
         {
             OGRE_LOCK_MUTEX(mVertexBuffersMutex);
@@ -85,7 +85,7 @@ namespace Ogre {
 		assert(numIndexes > 0);
 
         auto indexSize = HardwareIndexBuffer::indexSize(itype);
-        auto impl = new D3D11HardwareBuffer(D3D11HardwareBuffer::INDEX_BUFFER, indexSize * numIndexes, usage, mlpD3DDevice, useShadowBuffer, false);
+        auto impl = new D3D11HardwareBuffer(D3D11HardwareBuffer::INDEX_BUFFER, indexSize * numIndexes, usage, mlpD3DDevice, false, useShadowBuffer, false);
 
         auto buf = std::make_shared<HardwareIndexBuffer>(this, itype, numIndexes, impl);
         {
@@ -129,7 +129,7 @@ namespace Ogre {
 		else
 		{*/
 		auto impl = new D3D11HardwareBuffer(D3D11HardwareBuffer::CONSTANT_BUFFER,
-										sizeBytes, usage, mlpD3DDevice, useShadowBuffer, false);
+										sizeBytes, usage, mlpD3DDevice, false, useShadowBuffer, false);
 		auto buf = std::make_shared<HardwareUniformBuffer>(this, impl);
 		{
 			OGRE_LOCK_MUTEX(mUniformBuffersMutex);
